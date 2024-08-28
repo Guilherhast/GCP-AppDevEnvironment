@@ -14,7 +14,8 @@ REGION=${ZONE%-*}
 # Scripts
 BUCKETNAME=lab-bucket
 TOPICNAME=lab-topic
-ENTRYPOINTNAME=lab-entryPoint
+FUNCTIONNAME=lab-function
+ENTRYPOINTNAME=$FUNCTIONNAME
 OLDUSERNAME=Ernesto
 
 STORAGEOBJECT=${PROJECT}-${BUCKETNAME}
@@ -35,7 +36,8 @@ setProject(){
 }
 
 createBucket(){
-	$CLOUDCMD storage buckets create $BUCKETNAME --placement=$REGION
+	$CLOUDCMD storage buckets create gs://$BUCKETNAME
+	# --placement=$REGION
 }
 
 createPubSub(){
@@ -46,27 +48,43 @@ createCloudFunction(){
 	cd $APPFOLDER
 
 	$NPMCMD install
-	$CLOUDCMD functions deploy nodejs-pubsub-function \
+	$CLOUDCMD functions deploy $FUNCTIONNAME \
 		--gen2 \
 		--runtime=nodejs20 \
 		--region=$REGION \
 		--source=. \
 		--entry-point=$ENTRYPOINTNAME \
-		--trigger-topic cf-demo \
+		--trigger-resource=$BUCKETNAME \
+		--trigger-event=google.storage.object.finalize \
 		--stage-bucket ${PROJECT}-${BUCKETNAME} \
 		--service-account cloudfunctionsa@${PROJECT}.iam.gserviceaccount.com \
 		--allow-unauthenticated
+
+	sed -i  "s/GCLOUD_FUNCTION_NAME/$FUNCTIONNAME/" $APPFOLDER/index.js
+	sed -i  "s/GCLOUD_TOPIC_NAME/$TOPICNAME/" $APPFOLDER/index.js
 
 	cd - >/dev/null
 }
 
 removeOldUser(){
 	$CLOUDCMD iam roles delete $OLDUSERNAME --project=$PROJECT
+	$CLOUDCMD project remove-iam-policy-binding $PROJECT  \
+		--member=user:$OLDUSERNAME \
+		--role=roles/viewer
+
 }
 
 uploadFile(){
-	$CLOUDCMD storage cp ./Data/map.jpg \
-		gs://$BUCKETNAME
+	FILE="map"$(uuidgen | tr -d '-' )".jpg"
+	cp ./Data/map.jpg $FILE
+	$CLOUDCMD storage cp  ./Data/$FILE gs://$BUCKETNAME
+	rm $FILE
+	unset $FILE
+}
+
+testCloudFunction(){
+	$CLOUDCMD run services describe $FUNCTIONNAME \
+		--region $REGION
 }
 
 
@@ -84,4 +102,6 @@ echoDivision "Uploading object" &&
 uploadFile &&
 echoDivision "Removing old user" &&
 removeOldUser &&
+echoDivision "Testing cloud function" &&
+testCloudFunction &&
 echoDivision "Finished"

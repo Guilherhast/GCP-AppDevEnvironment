@@ -5,7 +5,7 @@ const gcs = new Storage();
 const { PubSub } = require('@google-cloud/pubsub');
 const imagemagick = require("imagemagick-stream");
 
-functions.cloudEvent('', cloudEvent => {
+functions.cloudEvent('GCLOUD_FUNCTION_NAME', cloudEvent => {
   const event = cloudEvent.data;
 
   console.log(`Event: ${event}`);
@@ -15,7 +15,7 @@ functions.cloudEvent('', cloudEvent => {
   const bucketName = event.bucket;
   const size = "64x64"
   const bucket = gcs.bucket(bucketName);
-  const topicName = "";
+  const topicName = "GCLOUD_TOPIC_NAME";
   const pubsub = new PubSub();
   if ( fileName.search("64x64_thumbnail") == -1 ){
     // doesn't have a thumbnail, get the filename extension
